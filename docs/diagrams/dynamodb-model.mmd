@@ -1,0 +1,20 @@
+flowchart TD
+  Tenant["PK TENANT#tenant<br/>SK META"]
+  Attraction["SK ATTRACTION#id"]
+  Slot["SK SLOT#id<br/>capacity and remaining"]
+  Reservation["SK RESERVATION#id<br/>status and validation code"]
+  Idempotency["SK IDEMPOTENCY#hash<br/>reservation id"]
+  Validation["SK VALIDATION#reservation<br/>validated time"]
+  Event["SK EVENT#time#id<br/>event type and payload"]
+  GSI["GSI1PK TENANT#tenant#VALIDATION#code<br/>GSI1SK RESERVATION#id"]
+
+  Tenant --> Attraction
+  Attraction --> Slot
+  Slot -->|"transactional capacity decrement"| Reservation
+  Reservation --> Idempotency
+  Reservation --> Validation
+  Reservation --> Event
+  Reservation --> GSI
+
+  Boundary["All items share the authenticated tenant partition"]
+  Boundary -.-> Tenant

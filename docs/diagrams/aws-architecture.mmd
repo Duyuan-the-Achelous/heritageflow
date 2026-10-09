@@ -1,0 +1,55 @@
+flowchart LR
+  subgraph Clients["Client roles"]
+    Visitor["Visitor"]
+    Admin["Tenant administrator"]
+    Validator["Gate validator"]
+  end
+
+  Internet["Internet"]
+
+  subgraph AWS["AWS single region"]
+    ALB["Application Load Balancer<br/>HTTPS and health checks"]
+
+    subgraph VPC["VPC across two availability zones"]
+      TaskA["ECS Fargate task A"]
+      TaskB["ECS Fargate task B"]
+    end
+
+    ECR["Elastic Container Registry"]
+    Secrets["Secrets Manager"]
+    DDB[("DynamoDB pooled table<br/>PITR and stream")]
+    Lambda["Stream forwarding Lambda"]
+    Queue["FIFO event queue"]
+    DLQ["Dead-letter queue"]
+    CW["CloudWatch logs metrics alarms"]
+    SNS["SNS email alert"]
+    Budget["AWS monthly budget"]
+    Scale["ECS target tracking<br/>2 to 6 tasks"]
+  end
+
+  CI["CI and deployment pipeline"]
+
+  Visitor --> Internet
+  Admin --> Internet
+  Validator --> Internet
+  Internet --> ALB
+  ALB --> TaskA
+  ALB --> TaskB
+  TaskA --> DDB
+  TaskB --> DDB
+  Secrets --> TaskA
+  Secrets --> TaskB
+  DDB -->|"stream event"| Lambda --> Queue
+  Queue -.->|"failed delivery"| DLQ
+  TaskA --> CW
+  TaskB --> CW
+  ALB --> CW
+  Queue --> CW
+  CW --> SNS
+  CW --> Scale
+  Scale --> TaskA
+  Scale --> TaskB
+  Budget --> SNS
+  CI --> ECR
+  ECR --> TaskA
+  ECR --> TaskB
