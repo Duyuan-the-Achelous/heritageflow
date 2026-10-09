@@ -1,0 +1,56 @@
+services:
+  dynamodb:
+    image: amazon/dynamodb-local:latest
+    user: root
+    command: "-jar DynamoDBLocal.jar -sharedDb -dbPath ./data"
+    working_dir: /home/dynamodblocal
+    ports:
+      - "8001:8000"
+    volumes:
+      - heritageflow-dynamodb:/home/dynamodblocal/data
+
+  dynamodb-init:
+    build:
+      context: .
+      target: runtime
+    command: ["python", "-m", "heritageflow.dynamo_bootstrap"]
+    depends_on:
+      dynamodb:
+        condition: service_started
+    environment: &dynamodb-environment
+      AWS_ACCESS_KEY_ID: local
+      AWS_SECRET_ACCESS_KEY: local
+      AWS_DEFAULT_REGION: eu-west-1
+      HERITAGEFLOW_ENV: development
+      HERITAGEFLOW_STORAGE: dynamodb
+      HERITAGEFLOW_DYNAMODB_TABLE: heritageflow
+      HERITAGEFLOW_DYNAMODB_ENDPOINT_URL: http://dynamodb:8000
+      HERITAGEFLOW_VISITOR_HASH_KEY: local-compose-only
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      target: runtime
+    ports:
+      - "8000:8000"
+    depends_on:
+      dynamodb-init:
+        condition: service_completed_successfully
+    environment: *dynamodb-environment
+
+  integration-tests:
+    profiles: ["test"]
+    build:
+      context: .
+      target: test
+    depends_on:
+      dynamodb-init:
+        condition: service_completed_successfully
+    environment:
+      <<: *dynamodb-environment
+      HERITAGEFLOW_INTEGRATION_DYNAMODB_URL: http://dynamodb:8000
+
+volumes:
+  heritageflow-dynamodb:
+

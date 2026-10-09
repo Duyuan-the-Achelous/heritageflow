@@ -1,0 +1,14 @@
+.git
+.github
+.venv
+.pytest_cache
+__pycache__
+*.db
+*.pyc
+*.tfstate
+*.tfstate.*
+.terraform
+infra
+experiments
+results
+workers
