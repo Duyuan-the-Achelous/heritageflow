@@ -1,11 +1,14 @@
 from contextlib import asynccontextmanager
 import logging
+from pathlib import Path
 import re
 import time
 from typing import Annotated, Any
 import uuid
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Response, status
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from .auth import Principal, authenticate, require_roles
 from .config import Settings, load_settings
@@ -55,6 +58,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         description="Multi-tenant reservation and admission-control prototype",
         lifespan=lifespan,
     )
+    static_directory = Path(__file__).parent / "static"
+    application.mount("/static", StaticFiles(directory=static_directory), name="static")
 
     @application.middleware("http")
     async def request_observability(request, call_next):
@@ -110,6 +115,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @application.get("/health")
     def health() -> dict[str, str]:
         return {"status": "ok"}
+
+    @application.get("/", include_in_schema=False)
+    def frontend():
+        return FileResponse(static_directory / "index.html")
 
     @application.get("/ready")
     def ready(reservation_service: ServiceDep) -> dict[str, str]:

@@ -79,7 +79,9 @@ same keys and GSI used by Terraform, and seeds the three demonstration tenants.
 docker-compose up --build
 ```
 
-Open `http://localhost:8000/docs`. Process liveness is available at `/health`;
+Open `http://localhost:8000/` for the visitor, attraction-management, and
+admission-validation web interface. API documentation is available at
+`http://localhost:8000/docs`. Process liveness is available at `/health`;
 dependency readiness is available at `/ready`. Every response includes an
 `X-Request-ID`, and request completion is written as JSON without tokens,
 visitor references, or validation codes. DynamoDB Local is exposed separately

@@ -179,3 +179,14 @@ def test_invalid_request_id_is_replaced(tmp_path: Path):
         assert response.headers["X-Request-ID"] != "contains spaces"
         assert len(response.headers["X-Request-ID"]) == 32
 
+
+def test_frontend_is_served(tmp_path: Path):
+    with make_client(tmp_path) as client:
+        page = client.get("/")
+        script = client.get("/static/app.js")
+
+        assert page.status_code == 200
+        assert "河洛行" in page.text
+        assert script.status_code == 200
+        assert "createReservation" in script.text
+

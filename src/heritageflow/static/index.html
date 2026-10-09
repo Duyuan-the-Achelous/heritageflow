@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="洛阳文化遗产景区预约与入园核验平台">
+    <meta name="theme-color" content="#8f2f2a">
+    <title>河洛行 · HeritageFlow</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%238f2f2a'/%3E%3Cpath d='M16 45h32M20 41V25l12-8 12 8v16M27 41V29h10v12' fill='none' stroke='%23fff8eb' stroke-width='4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="/static/app.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/" aria-label="河洛行首页">
+        <span class="brand-mark" aria-hidden="true">河</span>
+        <span><strong>河洛行</strong><small>HeritageFlow</small></span>
+      </a>
+      <div class="service-state" title="后端服务状态">
+        <span id="status-dot" class="status-dot"></span>
+        <span id="service-status">正在连接服务</span>
+      </div>
+    </header>
+
+    <main class="shell">
+      <section class="intro" aria-labelledby="page-title">
+        <div>
+          <p class="eyebrow">洛阳文化遗产预约平台</p>
+          <h1 id="page-title">从预约到入园，一处完成</h1>
+          <p>面向游客、景区管理员和检票人员的本地演示系统。</p>
+        </div>
+        <label class="tenant-picker">
+          <span>当前景区</span>
+          <select id="tenant-select">
+            <option value="guanlin">洛阳关林</option>
+            <option value="tomb-museum">洛阳古墓博物馆</option>
+            <option value="wanan-mountain">万安山</option>
+          </select>
+        </label>
+      </section>
+
+      <nav class="role-tabs" aria-label="工作区切换">
+        <button class="role-tab active" data-panel="visitor" aria-selected="true">游客预约</button>
+        <button class="role-tab" data-panel="admin" aria-selected="false">景区管理</button>
+        <button class="role-tab" data-panel="validator" aria-selected="false">入园核验</button>
+      </nav>
+
+      <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+
+      <section id="visitor-panel" class="workspace active" aria-labelledby="visitor-title">
+        <div class="section-heading">
+          <div>
+            <p class="step-label">VISITOR</p>
+            <h2 id="visitor-title">选择时段并预约</h2>
+          </div>
+          <button id="refresh-slots" class="button ghost" type="button">刷新时段</button>
+        </div>
+        <div class="workspace-grid">
+          <div>
+            <div id="attraction-summary" class="attraction-summary skeleton">正在读取景区信息…</div>
+            <div id="slot-list" class="slot-list" aria-live="polite"></div>
+          </div>
+          <form id="reservation-form" class="form-card">
+            <h3>预约信息</h3>
+            <input id="selected-slot" type="hidden">
+            <div id="selected-slot-label" class="selection-hint">请先选择左侧时段</div>
+            <label>游客标识
+              <input id="visitor-reference" required maxlength="200" value="visitor-demo-001" autocomplete="off">
+            </label>
+            <label>预约人数
+              <input id="quantity" type="number" min="1" max="10" value="1" required>
+            </label>
+            <button class="button primary" type="submit">确认预约</button>
+          </form>
+        </div>
+        <article id="reservation-result" class="result-card" hidden></article>
+      </section>
+
+      <section id="admin-panel" class="workspace" aria-labelledby="admin-title" hidden>
+        <div class="section-heading">
+          <div>
+            <p class="step-label">ADMIN</p>
+            <h2 id="admin-title">景区运营概览</h2>
+          </div>
+          <button id="refresh-admin" class="button ghost" type="button">刷新数据</button>
+        </div>
+        <div id="metric-grid" class="metric-grid"></div>
+        <div class="workspace-grid admin-grid">
+          <form id="slot-form" class="form-card">
+            <h3>新增预约时段</h3>
+            <label>开始时间
+              <input id="slot-start" type="datetime-local" required>
+            </label>
+            <label>结束时间
+              <input id="slot-end" type="datetime-local" required>
+            </label>
+            <label>接待容量
+              <input id="slot-capacity" type="number" min="1" max="100000" value="100" required>
+            </label>
+            <button class="button primary" type="submit">创建时段</button>
+          </form>
+          <div class="table-card">
+            <div class="table-title"><h3>当前时段</h3><span id="slot-count">0 个</span></div>
+            <div class="table-scroll">
+              <table>
+                <thead><tr><th>开始时间</th><th>容量</th><th>剩余</th></tr></thead>
+                <tbody id="admin-slot-list"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="validator-panel" class="workspace" aria-labelledby="validator-title" hidden>
+        <div class="validator-layout">
+          <div>
+            <p class="step-label">VALIDATOR</p>
+            <h2 id="validator-title">入园核验</h2>
+            <p>输入游客预约成功后获得的核验码。每个核验码只能使用一次。</p>
+          </div>
+          <form id="validation-form" class="form-card validation-form">
+            <label>核验码
+              <input id="validation-code" required minlength="8" maxlength="200" placeholder="输入核验码" autocomplete="off">
+            </label>
+            <button class="button primary" type="submit">核验入园</button>
+            <div id="validation-result" class="inline-result" aria-live="polite"></div>
+          </form>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <span>HeritageFlow 本地课程项目</span>
+      <a href="/docs">API 文档</a>
+    </footer>
+  </body>
+</html>
