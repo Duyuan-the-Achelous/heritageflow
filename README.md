@@ -89,6 +89,25 @@ Run the end-to-end test against DynamoDB Local with:
 docker-compose --profile test run --rm integration-tests
 ```
 
+With the API running, execute the guided demonstration and three local
+engineering-baseline experiments:
+
+```powershell
+.\scripts\demo.ps1
+.\.venv\Scripts\python.exe experiments\capacity_safety.py
+.\.venv\Scripts\python.exe experiments\tenant_isolation.py
+.\.venv\Scripts\python.exe experiments\idempotency_retry.py
+.\.venv\Scripts\python.exe experiments\summarize_results.py `
+  results\.local\capacity-safety-*.json `
+  results\.local\tenant-isolation-*.json `
+  results\.local\idempotency-retry-*.json `
+  --output results\.local\summary.csv
+```
+
+Each experiment exits non-zero when its invariant fails and records the Git
+commit, UTC timestamp, parameters, metrics, and pass/fail result. These runs are
+local correctness evidence, not cloud performance claims.
+
 The test creates and deletes its own table. It verifies seeding, API-level
 idempotency, cross-tenant isolation, persistence across an application restart,
 and single-use admission validation.
