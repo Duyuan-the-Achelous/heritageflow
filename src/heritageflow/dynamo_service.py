@@ -42,6 +42,9 @@ class DynamoReservationService:
         self.visitor_hash_key = visitor_hash_key.encode("utf-8")
         self.serializer = TypeSerializer()
 
+    def ready(self) -> None:
+        self.client.describe_table(TableName=self.table_name)
+
     def seed_demo_data(self) -> None:
         for tenant_id, name, tenant_type in TENANTS:
             self._put_if_absent(

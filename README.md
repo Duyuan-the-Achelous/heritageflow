@@ -79,8 +79,11 @@ same keys and GSI used by Terraform, and seeds the three demonstration tenants.
 docker-compose up --build
 ```
 
-Open `http://localhost:8000/docs`. DynamoDB Local is exposed separately on host
-port `8001`. Stop the services without deleting data with `docker compose down`;
+Open `http://localhost:8000/docs`. Process liveness is available at `/health`;
+dependency readiness is available at `/ready`. Every response includes an
+`X-Request-ID`, and request completion is written as JSON without tokens,
+visitor references, or validation codes. DynamoDB Local is exposed separately
+on host port `8001`. Stop the services without deleting data with `docker-compose down`;
 add `--volumes` only when you intentionally want a clean local database.
 
 Run the end-to-end test against DynamoDB Local with:

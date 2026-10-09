@@ -161,3 +161,21 @@ def test_cancel_restores_capacity_and_cannot_cancel_validated(tmp_path: Path):
         created_slot = next(item for item in slots if item["id"] == slot)
         assert created_slot["remaining_capacity"] == 2
 
+
+def test_readiness_checks_storage_and_returns_request_id(tmp_path: Path):
+    with make_client(tmp_path) as client:
+        response = client.get("/ready", headers={"X-Request-ID": "course-demo-001"})
+
+        assert response.status_code == 200
+        assert response.json() == {"status": "ready"}
+        assert response.headers["X-Request-ID"] == "course-demo-001"
+
+
+def test_invalid_request_id_is_replaced(tmp_path: Path):
+    with make_client(tmp_path) as client:
+        response = client.get("/health", headers={"X-Request-ID": "contains spaces"})
+
+        assert response.status_code == 200
+        assert response.headers["X-Request-ID"] != "contains spaces"
+        assert len(response.headers["X-Request-ID"]) == 32
+

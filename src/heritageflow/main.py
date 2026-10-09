@@ -1,5 +1,9 @@
 from contextlib import asynccontextmanager
+import logging
+import re
+import time
 from typing import Annotated, Any
+import uuid
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, Response, status
 
@@ -7,6 +11,7 @@ from .auth import Principal, authenticate, require_roles
 from .config import Settings, load_settings
 from .db import Database
 from .dynamo_service import DynamoReservationService
+from .observability import configure_http_logger
 from .schemas import (
     AttractionOut,
     ReservationCreate,
@@ -23,6 +28,7 @@ from .service import CapacityError, ConflictError, NotFoundError, ReservationSer
 
 def create_app(settings: Settings | None = None) -> FastAPI:
     app_settings = settings or load_settings()
+    http_logger = configure_http_logger()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -50,6 +56,39 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
 
+    @application.middleware("http")
+    async def request_observability(request, call_next):
+        supplied_id = request.headers.get("X-Request-ID", "")
+        request_id = supplied_id if re.fullmatch(r"[A-Za-z0-9._-]{1,100}", supplied_id) else uuid.uuid4().hex
+        request.state.request_id = request_id
+        started = time.perf_counter()
+        status_code = status.HTTP_500_INTERNAL_SERVER_ERROR
+        try:
+            response = await call_next(request)
+            status_code = response.status_code
+            response.headers["X-Request-ID"] = request_id
+            return response
+        except Exception:
+            http_logger.exception(
+                "request failed",
+                extra={"event": "http_request_exception", "request_id": request_id},
+            )
+            raise
+        finally:
+            http_logger.log(
+                logging.ERROR if status_code >= 500 else logging.INFO,
+                "request completed",
+                extra={
+                    "event": "http_request",
+                    "request_id": request_id,
+                    "method": request.method,
+                    "path": request.url.path,
+                    "status_code": status_code,
+                    "duration_ms": round((time.perf_counter() - started) * 1000, 2),
+                    "tenant_id": getattr(request.state, "tenant_id", None),
+                },
+            )
+
     def service() -> Any:
         return application.state.service
 
@@ -71,6 +110,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @application.get("/health")
     def health() -> dict[str, str]:
         return {"status": "ok"}
+
+    @application.get("/ready")
+    def ready(reservation_service: ServiceDep) -> dict[str, str]:
+        try:
+            reservation_service.ready()
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail="storage dependency unavailable") from exc
+        return {"status": "ready"}
 
     @application.get("/v1/attractions", response_model=list[AttractionOut])
     def list_attractions(principal: PrincipalDep, reservation_service: ServiceDep):

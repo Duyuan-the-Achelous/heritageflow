@@ -12,7 +12,7 @@
 | NFR-08 compliance | Synthetic data and declared region. | Repository contains no real visitor dataset. | Region and retention evidence. | Design only. |
 | NFR-09 cost | Budget alarm and low-fixed-cost public-subnet design. | Terraform variables only. | Cost model using measured usage and public prices. | Open. |
 | NFR-10 security | Secret injection, SG boundary, HMAC, role checks. | Secret scan and negative API tests pass. | HTTPS and IAM evidence. | Partially evidenced. |
-| NFR-11 observability | CloudWatch logs and two alarms. | Basic Uvicorn logs. | Structured logs, request IDs, alarm test. | In progress. |
+| NFR-11 observability | CloudWatch logs and two alarms. | JSON request logs, request IDs, readiness probe, and response-header tests pass. | CloudWatch alarm exercise. | Partially evidenced. |
 | NFR-12 reproducibility | Compose, Terraform, README, Git tag. | Clean Compose start and integration test pass. | Pipeline deployment from an empty environment. | Partially evidenced. |
 
 ## Course deliverables

@@ -39,6 +39,10 @@ class ReservationService:
     def hash_visitor_reference(self, value: str) -> str:
         return hmac.new(self.visitor_hash_key, value.encode("utf-8"), hashlib.sha256).hexdigest()
 
+    def ready(self) -> None:
+        with self.database.connect() as connection:
+            connection.execute("SELECT 1").fetchone()
+
     def list_attractions(self, tenant_id: str) -> list[dict]:
         with self.database.connect() as connection:
             rows = connection.execute(

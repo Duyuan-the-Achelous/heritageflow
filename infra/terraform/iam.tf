@@ -43,6 +43,7 @@ resource "aws_iam_role_policy" "ecs_task" {
       Effect = "Allow"
       Action = [
         "dynamodb:ConditionCheckItem",
+        "dynamodb:DescribeTable",
         "dynamodb:GetItem",
         "dynamodb:PutItem",
         "dynamodb:Query",

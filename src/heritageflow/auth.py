@@ -36,6 +36,7 @@ def authenticate(request: Request, authorization: str | None = Header(default=No
 
     if not principal.tenant_id or principal.role not in ALLOWED_ROLES:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid token mapping")
+    request.state.tenant_id = principal.tenant_id
     return principal
 
 
