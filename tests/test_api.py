@@ -69,6 +69,49 @@ def test_idempotency_does_not_consume_capacity_twice(tmp_path: Path):
         assert created_slot["remaining_capacity"] == 1
 
 
+def test_same_visitor_cannot_book_same_slot_twice(tmp_path: Path):
+    with make_client(tmp_path) as client:
+        slot = create_slot(client, "guanlin", "guanlin-main", 3)
+        first = reserve(client, "guanlin", "guanlin-main", slot, "visitor-one")
+        duplicate = client.post(
+            "/v1/reservations",
+            headers={**auth("guanlin"), "Idempotency-Key": "different-key-002"},
+            json={
+                "attraction_id": "guanlin-main",
+                "slot_id": slot,
+                "visitor_reference": "visitor-visitor-one",
+                "quantity": 1,
+            },
+        )
+
+        assert first.status_code == 201
+        assert duplicate.status_code == 409
+        assert duplicate.json()["detail"] == "visitor already has an active reservation for this slot"
+
+
+def test_cancelled_visitor_can_book_same_slot_again(tmp_path: Path):
+    with make_client(tmp_path) as client:
+        slot = create_slot(client, "guanlin", "guanlin-main", 2)
+        first = reserve(client, "guanlin", "guanlin-main", slot, "rebook-001").json()
+        cancelled = client.post(
+            f"/v1/reservations/{first['id']}/cancel",
+            headers=auth("guanlin"),
+        )
+        second = client.post(
+            "/v1/reservations",
+            headers={**auth("guanlin"), "Idempotency-Key": "rebook-002"},
+            json={
+                "attraction_id": "guanlin-main",
+                "slot_id": slot,
+                "visitor_reference": "visitor-rebook-001",
+                "quantity": 1,
+            },
+        )
+
+        assert cancelled.status_code == 200
+        assert second.status_code == 201
+
+
 def test_cross_tenant_access_is_hidden(tmp_path: Path):
     with make_client(tmp_path) as client:
         slot = create_slot(client, "guanlin", "guanlin-main", 1)
@@ -189,4 +232,3 @@ def test_frontend_is_served(tmp_path: Path):
         assert "河洛行" in page.text
         assert script.status_code == 200
         assert "createReservation" in script.text
-

@@ -29,14 +29,23 @@
           <h1 id="page-title">从预约到入园，一处完成</h1>
           <p>面向游客、景区管理员和检票人员的本地演示系统。</p>
         </div>
-        <label class="tenant-picker">
-          <span>当前景区</span>
-          <select id="tenant-select">
-            <option value="guanlin">洛阳关林</option>
-            <option value="tomb-museum">洛阳古墓博物馆</option>
-            <option value="wanan-mountain">万安山</option>
-          </select>
-        </label>
+        <div class="intro-controls">
+          <label class="tenant-picker">
+            <span>当前景区</span>
+            <select id="tenant-select">
+              <option value="guanlin">洛阳关林</option>
+              <option value="tomb-museum">洛阳古墓博物馆</option>
+              <option value="wanan-mountain">万安山</option>
+            </select>
+          </label>
+          <label class="token-picker">
+            <span>景区访问令牌</span>
+            <span class="token-row">
+              <input id="access-token" type="password" autocomplete="off" placeholder="粘贴当前景区令牌">
+              <button id="apply-token" class="button primary" type="button">连接</button>
+            </span>
+          </label>
+        </div>
       </section>
 
       <nav class="role-tabs" aria-label="工作区切换">

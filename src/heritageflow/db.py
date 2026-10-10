@@ -75,6 +75,8 @@ ON reservations(tenant_id, created_at);
 
 
 class Database:
+    insert_ignore_prefix = "INSERT OR IGNORE"
+
     def __init__(self, path: Path):
         self.path = path
 
@@ -102,4 +104,3 @@ class Database:
             raise
         finally:
             connection.close()
-

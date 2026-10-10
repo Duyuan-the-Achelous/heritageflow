@@ -5,6 +5,7 @@ __pycache__/
 *.db
 *.egg-info/
 .env
+.env.preview
 *.tfvars
 *.tfstate
 *.tfstate.*

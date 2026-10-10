@@ -7,8 +7,18 @@ const tenants = {
 const state = { tenant: "guanlin", attractions: [], slots: [], selectedSlot: null };
 const $ = (selector) => document.querySelector(selector);
 
+function accessToken(role = "visitor") {
+  const supplied = sessionStorage.getItem(`heritageflow-token:${state.tenant}`) || "";
+  if (supplied) return supplied;
+  if (["localhost", "127.0.0.1"].includes(window.location.hostname)) {
+    return `demo:${state.tenant}:${role}`;
+  }
+  return "";
+}
+
 function headers(role = "visitor", extra = {}) {
-  return { Authorization: `Bearer demo:${state.tenant}:${role}`, ...extra };
+  const token = accessToken(role);
+  return { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...extra };
 }
 
 async function api(path, options = {}) {
@@ -33,6 +43,16 @@ function formatDate(value) {
   }).format(new Date(value));
 }
 
+function newIdempotencyKey() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  if (globalThis.crypto?.getRandomValues) {
+    const bytes = new Uint8Array(16);
+    globalThis.crypto.getRandomValues(bytes);
+    return `request-${Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("")}`;
+  }
+  return `request-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 function admissionLabel(mode) {
   return { paid: "购票预约", free: "免费预约", pass_or_paid: "年票或购票" }[mode] || mode;
 }
@@ -50,6 +70,12 @@ async function checkService() {
 
 async function loadVisitor() {
   const attractionId = tenants[state.tenant].attraction;
+  if (!accessToken()) {
+    $("#attraction-summary").classList.remove("skeleton");
+    $("#attraction-summary").innerHTML = "<h3>需要访问令牌</h3><p>请粘贴当前景区令牌并点击连接。</p>";
+    $("#slot-list").innerHTML = "";
+    return;
+  }
   try {
     const [attractions, slots] = await Promise.all([
       api("/v1/attractions", { headers: headers() }),
@@ -111,7 +137,7 @@ async function createReservation(event) {
   try {
     const reservation = await api("/v1/reservations", {
       method: "POST",
-      headers: headers("visitor", { "Content-Type": "application/json", "Idempotency-Key": crypto.randomUUID() }),
+      headers: headers("visitor", { "Content-Type": "application/json", "Idempotency-Key": newIdempotencyKey() }),
       body: JSON.stringify({
         attraction_id: tenants[state.tenant].attraction,
         slot_id: state.selectedSlot.id,
@@ -258,8 +284,16 @@ function switchPanel(name) {
 document.querySelectorAll(".role-tab").forEach((tab) => tab.addEventListener("click", () => switchPanel(tab.dataset.panel)));
 $("#tenant-select").addEventListener("change", async (event) => {
   state.tenant = event.target.value;
+  $("#access-token").value = sessionStorage.getItem(`heritageflow-token:${state.tenant}`) || "";
   $("#reservation-result").hidden = true;
   $("#validation-result").textContent = "";
+  await loadVisitor();
+  if (!$("#admin-panel").hidden) await loadAdmin();
+});
+$("#apply-token").addEventListener("click", async () => {
+  const token = $("#access-token").value.trim();
+  if (!token) return showNotice("请输入当前景区访问令牌");
+  sessionStorage.setItem(`heritageflow-token:${state.tenant}`, token);
   await loadVisitor();
   if (!$("#admin-panel").hidden) await loadAdmin();
 });
@@ -270,5 +304,6 @@ $("#slot-form").addEventListener("submit", createSlot);
 $("#validation-form").addEventListener("submit", validateAdmission);
 
 setDefaultTimes();
+$("#access-token").value = sessionStorage.getItem(`heritageflow-token:${state.tenant}`) || "";
 checkService();
 loadVisitor();

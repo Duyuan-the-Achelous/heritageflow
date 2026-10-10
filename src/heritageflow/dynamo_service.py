@@ -167,6 +167,10 @@ class DynamoReservationService:
         if existing:
             return existing, False
 
+        visitor_reference_hash = self.hash_visitor_reference(visitor_reference)
+        if self._active_reservation_for_visitor(tenant_id, slot_id, visitor_reference_hash):
+            raise ConflictError("visitor already has an active reservation for this slot")
+
         slot_key = {"PK": self._tenant_pk(tenant_id), "SK": self._slot_sk(slot_id)}
         slot = self.table.get_item(Key=slot_key, ConsistentRead=True).get("Item")
         if not slot or slot.get("attraction_id") != attraction_id:
@@ -183,7 +187,7 @@ class DynamoReservationService:
             "tenant_id": tenant_id,
             "attraction_id": attraction_id,
             "slot_id": slot_id,
-            "visitor_reference_hash": self.hash_visitor_reference(visitor_reference),
+            "visitor_reference_hash": visitor_reference_hash,
             "quantity": quantity,
             "status": "confirmed",
             "validation_code": validation_code,
@@ -196,6 +200,13 @@ class DynamoReservationService:
             "PK": self._tenant_pk(tenant_id),
             "SK": self._idempotency_sk(idempotency_key),
             "entity_type": "idempotency",
+            "reservation_id": reservation_id,
+            "created_at": created_at,
+        }
+        booking = {
+            "PK": self._tenant_pk(tenant_id),
+            "SK": self._booking_sk(slot_id, visitor_reference_hash),
+            "entity_type": "active_booking",
             "reservation_id": reservation_id,
             "created_at": created_at,
         }
@@ -236,6 +247,13 @@ class DynamoReservationService:
                             "ConditionExpression": "attribute_not_exists(PK)",
                         }
                     },
+                    {
+                        "Put": {
+                            "TableName": self.table_name,
+                            "Item": self._serialize(booking),
+                            "ConditionExpression": "attribute_not_exists(PK)",
+                        }
+                    },
                     {"Put": {"TableName": self.table_name, "Item": self._serialize(event)}},
                 ]
             )
@@ -250,7 +268,7 @@ class DynamoReservationService:
                 raise NotFoundError("slot not found") from exc
             if int(current_slot.get("remaining_capacity", 0)) < quantity:
                 raise CapacityError("insufficient remaining capacity") from exc
-            raise ConflictError("reservation transaction conflicted; retry safely") from exc
+            raise ConflictError("visitor already has an active reservation for this slot") from exc
         return self._public_reservation(reservation), True
 
     def get_reservation(self, tenant_id: str, reservation_id: str) -> dict:
@@ -269,48 +287,68 @@ class DynamoReservationService:
             reservation_id,
             {"slot_id": reservation["slot_id"], "quantity": int(reservation["quantity"])},
         )
-        try:
-            self.client.transact_write_items(
-                TransactItems=[
-                    {
-                        "Update": {
-                            "TableName": self.table_name,
-                            "Key": self._serialize(
-                                {
-                                    "PK": self._tenant_pk(tenant_id),
-                                    "SK": self._reservation_sk(reservation_id),
-                                }
-                            ),
-                            "UpdateExpression": "SET #status = :cancelled, cancelled_at = :at",
-                            "ConditionExpression": "#status = :confirmed",
-                            "ExpressionAttributeNames": {"#status": "status"},
-                            "ExpressionAttributeValues": self._serialize(
-                                {
-                                    ":cancelled": "cancelled",
-                                    ":confirmed": "confirmed",
-                                    ":at": cancelled_at,
-                                }
-                            ),
+        booking_key = {
+            "PK": self._tenant_pk(tenant_id),
+            "SK": self._booking_sk(
+                reservation["slot_id"], reservation["visitor_reference_hash"]
+            ),
+        }
+        booking = self.table.get_item(Key=booking_key, ConsistentRead=True).get("Item")
+        release_booking = booking and booking.get("reservation_id") == reservation_id
+        transaction_items = [
+            {
+                "Update": {
+                    "TableName": self.table_name,
+                    "Key": self._serialize(
+                        {
+                            "PK": self._tenant_pk(tenant_id),
+                            "SK": self._reservation_sk(reservation_id),
                         }
-                    },
-                    {
-                        "Update": {
-                            "TableName": self.table_name,
-                            "Key": self._serialize(
-                                {
-                                    "PK": self._tenant_pk(tenant_id),
-                                    "SK": self._slot_sk(reservation["slot_id"]),
-                                }
-                            ),
-                            "UpdateExpression": "ADD remaining_capacity :quantity",
-                            "ExpressionAttributeValues": self._serialize(
-                                {":quantity": int(reservation["quantity"])}
-                            ),
+                    ),
+                    "UpdateExpression": "SET #status = :cancelled, cancelled_at = :at",
+                    "ConditionExpression": "#status = :confirmed",
+                    "ExpressionAttributeNames": {"#status": "status"},
+                    "ExpressionAttributeValues": self._serialize(
+                        {
+                            ":cancelled": "cancelled",
+                            ":confirmed": "confirmed",
+                            ":at": cancelled_at,
                         }
-                    },
-                    {"Put": {"TableName": self.table_name, "Item": self._serialize(event)}},
-                ]
+                    ),
+                }
+            },
+            {
+                "Update": {
+                    "TableName": self.table_name,
+                    "Key": self._serialize(
+                        {
+                            "PK": self._tenant_pk(tenant_id),
+                            "SK": self._slot_sk(reservation["slot_id"]),
+                        }
+                    ),
+                    "UpdateExpression": "ADD remaining_capacity :quantity",
+                    "ExpressionAttributeValues": self._serialize(
+                        {":quantity": int(reservation["quantity"])}
+                    ),
+                }
+            },
+            {"Put": {"TableName": self.table_name, "Item": self._serialize(event)}},
+        ]
+        if release_booking:
+            transaction_items.append(
+                {
+                    "Delete": {
+                        "TableName": self.table_name,
+                        "Key": self._serialize(booking_key),
+                        "ConditionExpression": "reservation_id = :reservation_id",
+                        "ExpressionAttributeValues": self._serialize(
+                            {":reservation_id": reservation_id}
+                        ),
+                    }
+                }
             )
+        try:
+            self.client.transact_write_items(TransactItems=transaction_items)
         except ClientError as exc:
             if exc.response.get("Error", {}).get("Code") == "TransactionCanceledException":
                 latest = self._raw_reservation(tenant_id, reservation_id)
@@ -416,6 +454,18 @@ class DynamoReservationService:
             return None
         return self.get_reservation(tenant_id, marker["reservation_id"])
 
+    def _active_reservation_for_visitor(
+        self, tenant_id: str, slot_id: str, visitor_reference_hash: str
+    ) -> dict | None:
+        for reservation in self._query_prefix(tenant_id, "RESERVATION#"):
+            if (
+                reservation.get("slot_id") == slot_id
+                and reservation.get("visitor_reference_hash") == visitor_reference_hash
+                and reservation.get("status") in {"confirmed", "validated"}
+            ):
+                return reservation
+        return None
+
     def _query_prefix(self, tenant_id: str, prefix: str) -> list[dict]:
         kwargs = {
             "KeyConditionExpression": Key("PK").eq(self._tenant_pk(tenant_id))
@@ -473,6 +523,11 @@ class DynamoReservationService:
     def _idempotency_sk(key: str) -> str:
         digest = hashlib.sha256(key.encode("utf-8")).hexdigest()
         return f"IDEMPOTENCY#{digest}"
+
+    @staticmethod
+    def _booking_sk(slot_id: str, visitor_reference_hash: str) -> str:
+        digest = hashlib.sha256(f"{slot_id}:{visitor_reference_hash}".encode("utf-8")).hexdigest()
+        return f"BOOKING#{digest}"
 
     @staticmethod
     def _public_attraction(item: dict) -> dict:

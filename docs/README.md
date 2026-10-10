@@ -10,6 +10,8 @@ deployment.
 - `proposal.md`: problem, customer, user journey, and why-cloud argument.
 - `non-functional-requirements.md`: measurable targets stated before cloud tests.
 - `architecture.md`: system boundaries, cloud topology, and operational flow.
+- `alicloud-roadmap.md`: incremental migration from the public preview to the
+  managed Alibaba Cloud evaluation environment.
 - `data-model.md`: DynamoDB keys, entities, access patterns, and invariants.
 - `threat-model.md`: assets, trust boundaries, threats, and mitigations.
 - `traceability.md`: requirement-to-implementation-to-evidence matrix.

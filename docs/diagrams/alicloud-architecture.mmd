@@ -1,0 +1,32 @@
+flowchart LR
+  U["Visitors, tenant admins, validators"]
+
+  subgraph Delivery["Delivery pipeline"]
+    GH["GitHub Actions\nbuild, test, deploy"]
+    ACR["Alibaba Cloud Container Registry\nversioned images"]
+  end
+
+  subgraph Alibaba["Alibaba Cloud target environment"]
+    ENTRY["HTTPS public endpoint\nmanaged ingress or load balancer"]
+    SAE["Serverless App Engine\n2 to 6 container instances\nautomatic scaling"]
+    RDS[("ApsaraDB RDS MySQL\nmanaged persistent data")]
+    SECRETS["Runtime secrets\nRAM and encrypted variables"]
+    OBS["SLS and CloudMonitor\nlogs, metrics, alerts"]
+  end
+
+  subgraph Preview["Current preview and fallback"]
+    SAS["Lightweight Application Server\nNginx and Docker v3"]
+    SQLITE[("Persistent SQLite volume")]
+  end
+
+  GH -->|push image| ACR
+  ACR -->|deploy immutable revision| SAE
+  U -->|HTTPS| ENTRY
+  ENTRY --> SAE
+  SAE -->|tenant-scoped SQL transactions| RDS
+  SECRETS --> SAE
+  SAE --> OBS
+  ENTRY --> OBS
+  U -. assessment fallback .-> SAS
+  SAS --> SQLITE
+

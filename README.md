@@ -20,6 +20,7 @@ operator or production system.
 - tests for isolation, idempotency, validation, cancellation, and overselling;
 - k6 baseline-load and spike experiments.
 - selectable SQLite and DynamoDB storage backends;
+- MySQL shared storage for horizontally scaled Alibaba Cloud deployments;
 - DynamoDB transactional capacity, idempotency, and audit-event writes;
 - DynamoDB Streams to FIFO SQS event forwarding;
 - Terraform for AWS VPC, ECS Fargate, ALB, DynamoDB, SQS, monitoring, secrets,
@@ -116,6 +117,44 @@ local correctness evidence, not cloud performance claims.
 The test creates and deletes its own table. It verifies seeding, API-level
 idempotency, cross-tenant isolation, persistence across an application restart,
 and single-use admission validation.
+
+## Verify the Alibaba Cloud data path locally
+
+This Compose stack runs two independent API containers against one MySQL 8.4
+database. It verifies that capacity, idempotency, and duplicate-booking rules
+remain consistent across application instances before an RDS instance is
+created.
+
+```powershell
+docker compose -f compose.mysql.yaml --profile test up --build `
+  --abort-on-container-exit --exit-code-from integration-tests
+docker compose -f compose.mysql.yaml down
+```
+
+During manual testing, API A is available at `http://localhost:8010` and API B
+at `http://localhost:8012`. Both display the same data. Add `--volumes` to the
+`down` command only when you intentionally want to erase the local MySQL data.
+
+The managed deployment uses the same image with `HERITAGEFLOW_STORAGE=mysql`
+and supplies `HERITAGEFLOW_MYSQL_HOST`, `HERITAGEFLOW_MYSQL_PORT`,
+`HERITAGEFLOW_MYSQL_DATABASE`, `HERITAGEFLOW_MYSQL_USER`, and
+`HERITAGEFLOW_MYSQL_PASSWORD` from the cloud runtime configuration.
+
+## Single-server cloud preview
+
+The preview Compose file is for the first public smoke test on a small Linux
+server. It runs one API container with a persistent SQLite volume and does not
+represent the final scalable architecture.
+
+```bash
+python3 scripts/generate_preview_env.py
+sudo docker compose --env-file .env.preview -f compose.preview.yaml up --build -d
+sudo docker compose --env-file .env.preview -f compose.preview.yaml ps
+```
+
+Keep `.env.preview` on the server only. Do not commit it or paste its contents
+into an issue, report, or chat. The final cloud evaluation must use a managed
+shared database and horizontally scalable compute instead of this preview.
 
 ## AWS deployment
 

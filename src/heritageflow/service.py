@@ -7,8 +7,9 @@ import secrets
 import sqlite3
 import uuid
 from datetime import datetime, timezone
+from typing import Any
 
-from .db import Database
+from pymysql.err import IntegrityError as MySQLIntegrityError
 
 
 class NotFoundError(Exception):
@@ -32,7 +33,7 @@ def new_id(prefix: str) -> str:
 
 
 class ReservationService:
-    def __init__(self, database: Database, visitor_hash_key: str):
+    def __init__(self, database: Any, visitor_hash_key: str):
         self.database = database
         self.visitor_hash_key = visitor_hash_key.encode("utf-8")
 
@@ -105,6 +106,38 @@ class ReservationService:
         quantity: int,
         idempotency_key: str,
     ) -> tuple[dict, bool]:
+        try:
+            return self._create_reservation_transaction(
+                tenant_id,
+                attraction_id,
+                slot_id,
+                visitor_reference,
+                quantity,
+                idempotency_key,
+            )
+        except MySQLIntegrityError as exc:
+            # A second application instance can race after the initial lookup.
+            # The database constraints decide the winner; an idempotency race
+            # still returns the winning reservation instead of becoming a 500.
+            with self.database.connect() as connection:
+                existing = connection.execute(
+                    """SELECT * FROM reservations
+                       WHERE tenant_id = ? AND idempotency_key = ?""",
+                    (tenant_id, idempotency_key),
+                ).fetchone()
+            if existing:
+                return dict(existing), False
+            raise ConflictError("visitor already has an active reservation for this slot") from exc
+
+    def _create_reservation_transaction(
+        self,
+        tenant_id: str,
+        attraction_id: str,
+        slot_id: str,
+        visitor_reference: str,
+        quantity: int,
+        idempotency_key: str,
+    ) -> tuple[dict, bool]:
         with self.database.transaction(immediate=True) as connection:
             existing = connection.execute(
                 """SELECT * FROM reservations
@@ -113,6 +146,17 @@ class ReservationService:
             ).fetchone()
             if existing:
                 return dict(existing), False
+
+            visitor_reference_hash = self.hash_visitor_reference(visitor_reference)
+            duplicate = connection.execute(
+                """SELECT id FROM reservations
+                   WHERE tenant_id = ? AND slot_id = ? AND visitor_reference_hash = ?
+                     AND status IN ('confirmed', 'validated')
+                   LIMIT 1""",
+                (tenant_id, slot_id, visitor_reference_hash),
+            ).fetchone()
+            if duplicate:
+                raise ConflictError("visitor already has an active reservation for this slot")
 
             slot = connection.execute(
                 """SELECT id FROM slots
@@ -144,7 +188,7 @@ class ReservationService:
                     tenant_id,
                     attraction_id,
                     slot_id,
-                    self.hash_visitor_reference(visitor_reference),
+                    visitor_reference_hash,
                     quantity,
                     validation_code,
                     idempotency_key,
@@ -222,7 +266,7 @@ class ReservationService:
                        VALUES (?, ?, ?, ?)""",
                     (validation_id, tenant_id, reservation["id"], validated_at),
                 )
-            except sqlite3.IntegrityError as exc:
+            except (sqlite3.IntegrityError, MySQLIntegrityError) as exc:
                 raise ConflictError("reservation already validated") from exc
             connection.execute(
                 "UPDATE reservations SET status = 'validated' WHERE id = ?",
@@ -262,7 +306,7 @@ class ReservationService:
 
     def _write_audit(
         self,
-        connection: sqlite3.Connection,
+        connection: Any,
         tenant_id: str,
         event_type: str,
         entity_id: str,
@@ -274,4 +318,3 @@ class ReservationService:
                VALUES (?, ?, ?, ?, ?, ?)""",
             (new_id("evt"), tenant_id, event_type, entity_id, json.dumps(payload), utc_now()),
         )
-

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Any
 from datetime import datetime, timedelta, timezone
 
 from .config import load_settings
@@ -19,15 +20,16 @@ ATTRACTIONS = [
 ]
 
 
-def seed(database: Database) -> None:
+def seed(database: Any) -> None:
     database.initialize()
+    insert_ignore = database.insert_ignore_prefix
     with database.transaction(immediate=True) as connection:
         connection.executemany(
-            "INSERT OR IGNORE INTO tenants (id, name, tenant_type) VALUES (?, ?, ?)",
+            f"{insert_ignore} INTO tenants (id, name, tenant_type) VALUES (?, ?, ?)",
             TENANTS,
         )
         connection.executemany(
-            """INSERT OR IGNORE INTO attractions
+            f"""{insert_ignore} INTO attractions
                (id, tenant_id, name, admission_mode, requires_real_name, no_show_limit)
                VALUES (?, ?, ?, ?, ?, ?)""",
             ATTRACTIONS,
@@ -37,7 +39,7 @@ def seed(database: Database) -> None:
         for attraction_id, tenant_id, _name, _mode, _real_name, _no_show_limit in ATTRACTIONS:
             slot_id = f"demo-{attraction_id}-tomorrow"
             connection.execute(
-                """INSERT OR IGNORE INTO slots
+                f"""{insert_ignore} INTO slots
                    (id, tenant_id, attraction_id, starts_at, ends_at, capacity, remaining_capacity)
                    VALUES (?, ?, ?, ?, ?, ?, ?)""",
                 (
@@ -60,4 +62,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

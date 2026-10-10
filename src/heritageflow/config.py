@@ -17,6 +17,11 @@ class Settings:
     aws_region: str = "eu-west-1"
     dynamodb_endpoint_url: str | None = None
     seed_demo: bool = False
+    mysql_host: str = "127.0.0.1"
+    mysql_port: int = 3306
+    mysql_database: str = "heritageflow"
+    mysql_user: str = "heritageflow"
+    mysql_password: str = ""
 
 
 def load_settings() -> Settings:
@@ -34,8 +39,13 @@ def load_settings() -> Settings:
         raise RuntimeError("HERITAGEFLOW_API_KEYS_JSON is required outside development")
 
     storage_backend = os.getenv("HERITAGEFLOW_STORAGE", "sqlite")
-    if storage_backend not in {"sqlite", "dynamodb"}:
-        raise RuntimeError("HERITAGEFLOW_STORAGE must be sqlite or dynamodb")
+    if storage_backend not in {"sqlite", "mysql", "dynamodb"}:
+        raise RuntimeError("HERITAGEFLOW_STORAGE must be sqlite, mysql, or dynamodb")
+
+    try:
+        mysql_port = int(os.getenv("HERITAGEFLOW_MYSQL_PORT", "3306"))
+    except ValueError as exc:
+        raise RuntimeError("HERITAGEFLOW_MYSQL_PORT must be an integer") from exc
 
     return Settings(
         environment=environment,
@@ -47,5 +57,9 @@ def load_settings() -> Settings:
         aws_region=os.getenv("HERITAGEFLOW_AWS_REGION", os.getenv("AWS_REGION", "eu-west-1")),
         dynamodb_endpoint_url=os.getenv("HERITAGEFLOW_DYNAMODB_ENDPOINT_URL") or None,
         seed_demo=os.getenv("HERITAGEFLOW_SEED_DEMO", "false").lower() == "true",
+        mysql_host=os.getenv("HERITAGEFLOW_MYSQL_HOST", "127.0.0.1"),
+        mysql_port=mysql_port,
+        mysql_database=os.getenv("HERITAGEFLOW_MYSQL_DATABASE", "heritageflow"),
+        mysql_user=os.getenv("HERITAGEFLOW_MYSQL_USER", "heritageflow"),
+        mysql_password=os.getenv("HERITAGEFLOW_MYSQL_PASSWORD", ""),
     )
-

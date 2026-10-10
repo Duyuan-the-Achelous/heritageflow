@@ -46,7 +46,10 @@ button, select { cursor: pointer; }
 h1, h2, h3, p { margin-top: 0; }
 h1 { margin-bottom: 10px; font-family: "STSong", "SimSun", serif; font-size: clamp(2.1rem, 5vw, 4rem); font-weight: 600; letter-spacing: -.03em; }
 .intro p:last-child, .validator-layout > div > p:last-child { color: var(--muted); line-height: 1.7; }
+.intro-controls { width: min(420px, 100%); display: grid; gap: 14px; }
 .tenant-picker { min-width: 230px; }
+.token-row { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+.token-row .button { white-space: nowrap; }
 label { display: grid; gap: 8px; color: #514a46; font-size: .9rem; font-weight: 600; }
 input, select {
   width: 100%; padding: 13px 14px; border: 1px solid var(--line); border-radius: 10px;
@@ -127,7 +130,7 @@ footer a { color: var(--red); }
   .topbar { padding: 0 14px; }
   .service-state span:last-child { display: none; }
   .intro { align-items: stretch; flex-direction: column; }
-  .tenant-picker { min-width: 0; }
+  .intro-controls, .tenant-picker { min-width: 0; width: 100%; }
   .role-tabs { overflow-x: auto; padding-bottom: 4px; }
   .role-tab { flex: 0 0 auto; }
   .workspace { padding: 20px 16px; }

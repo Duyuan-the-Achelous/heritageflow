@@ -14,6 +14,7 @@ from .auth import Principal, authenticate, require_roles
 from .config import Settings, load_settings
 from .db import Database
 from .dynamo_service import DynamoReservationService
+from .mysql_db import MySQLDatabase
 from .observability import configure_http_logger
 from .schemas import (
     AttractionOut,
@@ -45,6 +46,18 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             )
             if app_settings.seed_demo:
                 reservation_service.seed_demo_data()
+        elif app_settings.storage_backend == "mysql":
+            database = MySQLDatabase(
+                host=app_settings.mysql_host,
+                port=app_settings.mysql_port,
+                database=app_settings.mysql_database,
+                user=app_settings.mysql_user,
+                password=app_settings.mysql_password,
+            )
+            database.initialize()
+            if app_settings.seed_demo:
+                seed(database)
+            reservation_service = ReservationService(database, app_settings.visitor_hash_key)
         else:
             database = Database(app_settings.database_path)
             seed(database)
@@ -212,4 +225,3 @@ def _error_response(status_code: int, detail: str):
 
 
 app = create_app()
-

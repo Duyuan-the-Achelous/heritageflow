@@ -53,6 +53,31 @@ def test_dynamo_reservation_is_idempotent_and_capacity_safe(service):
         )
 
 
+def test_dynamo_same_visitor_cannot_book_same_slot_twice_and_can_rebook_after_cancel(service):
+    slot = service.create_slot(
+        "guanlin",
+        "guanlin-main",
+        "2030-01-01T09:00:00+00:00",
+        "2030-01-01T10:00:00+00:00",
+        2,
+    )
+    first, _ = service.create_reservation(
+        "guanlin", "guanlin-main", slot["id"], "visitor-a", 1, "first-key-001"
+    )
+
+    with pytest.raises(ConflictError, match="visitor already has"):
+        service.create_reservation(
+            "guanlin", "guanlin-main", slot["id"], "visitor-a", 1, "second-key-002"
+        )
+
+    service.cancel_reservation("guanlin", first["id"])
+    rebooked, created = service.create_reservation(
+        "guanlin", "guanlin-main", slot["id"], "visitor-a", 1, "third-key-003"
+    )
+    assert created is True
+    assert rebooked["id"] != first["id"]
+
+
 def test_dynamo_tenant_scope_and_single_use_validation(service):
     slot = service.create_slot(
         "wanan-mountain",

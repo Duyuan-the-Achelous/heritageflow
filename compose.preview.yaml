@@ -1,0 +1,30 @@
+services:
+  api:
+    build:
+      context: .
+      target: runtime
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      HERITAGEFLOW_ENV: production
+      HERITAGEFLOW_STORAGE: sqlite
+      HERITAGEFLOW_DB_PATH: /data/heritageflow.db
+      HERITAGEFLOW_VISITOR_HASH_KEY: ${HERITAGEFLOW_VISITOR_HASH_KEY:?generate .env.preview first}
+      HERITAGEFLOW_API_KEYS_JSON: ${HERITAGEFLOW_API_KEYS_JSON:?generate .env.preview first}
+    volumes:
+      - heritageflow-preview-data:/data
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/ready')"
+      interval: 10s
+      timeout: 3s
+      retries: 6
+      start_period: 15s
+
+volumes:
+  heritageflow-preview-data:
+

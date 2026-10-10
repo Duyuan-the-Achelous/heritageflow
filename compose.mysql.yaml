@@ -1,0 +1,78 @@
+x-api-environment: &api-environment
+  HERITAGEFLOW_ENV: development
+  HERITAGEFLOW_STORAGE: mysql
+  HERITAGEFLOW_MYSQL_HOST: mysql
+  HERITAGEFLOW_MYSQL_PORT: 3306
+  HERITAGEFLOW_MYSQL_DATABASE: heritageflow
+  HERITAGEFLOW_MYSQL_USER: heritageflow
+  HERITAGEFLOW_MYSQL_PASSWORD: local-mysql-only
+  HERITAGEFLOW_VISITOR_HASH_KEY: local-mysql-integration-key
+  HERITAGEFLOW_SEED_DEMO: "true"
+
+x-api-service: &api-service
+  build:
+    context: .
+    target: runtime
+  environment: *api-environment
+  restart: unless-stopped
+  healthcheck:
+    test:
+      - CMD
+      - python
+      - -c
+      - "import urllib.request; urllib.request.urlopen('http://localhost:8000/ready')"
+    interval: 5s
+    timeout: 3s
+    retries: 12
+    start_period: 10s
+
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: heritageflow
+      MYSQL_USER: heritageflow
+      MYSQL_PASSWORD: local-mysql-only
+      MYSQL_ROOT_PASSWORD: local-root-only
+    volumes:
+      - heritageflow-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-plocal-root-only"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  api-a:
+    <<: *api-service
+    ports:
+      - "8010:8000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  api-b:
+    <<: *api-service
+    ports:
+      - "8012:8000"
+    depends_on:
+      api-a:
+        condition: service_healthy
+
+  integration-tests:
+    build:
+      context: .
+      target: test
+    profiles: ["test"]
+    environment:
+      HERITAGEFLOW_INTEGRATION_MYSQL_API_A: http://api-a:8000
+      HERITAGEFLOW_INTEGRATION_MYSQL_API_B: http://api-b:8000
+    depends_on:
+      api-a:
+        condition: service_healthy
+      api-b:
+        condition: service_healthy
+    command: ["python", "-m", "pytest", "tests/test_mysql_shared.py", "-q"]
+
+volumes:
+  heritageflow-mysql-data:
