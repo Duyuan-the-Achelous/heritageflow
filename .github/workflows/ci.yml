@@ -54,8 +54,8 @@ jobs:
     permissions:
       contents: read
     env:
-      ACR_REGISTRY: crpi-pcn8j07ylq6rggqgz.cn-beijing.personal.cr.aliyuncs.com
-      ACR_IMAGE: crpi-pcn8j07ylq6rggqgz.cn-beijing.personal.cr.aliyuncs.com/duyuan-heritageflow/heritageflow
+      ACR_REGISTRY: crpi-pcn8j07ylq6rgqgz.cn-beijing.personal.cr.aliyuncs.com
+      ACR_IMAGE: crpi-pcn8j07ylq6rgqgz.cn-beijing.personal.cr.aliyuncs.com/duyuan-heritageflow/heritageflow
     steps:
       - uses: actions/checkout@v4
       - uses: docker/login-action@v3
