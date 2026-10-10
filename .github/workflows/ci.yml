@@ -69,6 +69,8 @@ jobs:
           context: .
           target: runtime
           push: true
+          provenance: false
+          sbom: false
           tags: |
             ${{ env.ACR_IMAGE }}:latest
             ${{ env.ACR_IMAGE }}:${{ github.sha }}
