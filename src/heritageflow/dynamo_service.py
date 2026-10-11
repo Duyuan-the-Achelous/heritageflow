@@ -274,6 +274,14 @@ class DynamoReservationService:
     def get_reservation(self, tenant_id: str, reservation_id: str) -> dict:
         return self._public_reservation(self._raw_reservation(tenant_id, reservation_id))
 
+    def list_reservations(self, tenant_id: str) -> list[dict]:
+        reservations = self._query_prefix(tenant_id, "RESERVATION#")
+        reservations.sort(
+            key=lambda item: (item["created_at"], item["id"]),
+            reverse=True,
+        )
+        return [self._public_reservation(item) for item in reservations]
+
     def cancel_reservation(self, tenant_id: str, reservation_id: str) -> dict:
         reservation = self._raw_reservation(tenant_id, reservation_id)
         if reservation["status"] == "cancelled":

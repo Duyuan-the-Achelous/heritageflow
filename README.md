@@ -13,6 +13,7 @@ operator or production system.
 - configurable capacity slots;
 - atomic capacity decrement;
 - idempotent reservation creation;
+- authenticated, tenant-scoped reservation listing;
 - cancellation with capacity restoration;
 - single-use, tenant-scoped admission validation;
 - privacy-preserving visitor-reference hashing;

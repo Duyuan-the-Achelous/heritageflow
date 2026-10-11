@@ -124,6 +124,34 @@ def test_cross_tenant_access_is_hidden(tmp_path: Path):
         assert response.status_code == 404
 
 
+def test_reservation_list_is_authenticated_and_tenant_scoped(tmp_path: Path):
+    with make_client(tmp_path) as client:
+        guanlin_slot = create_slot(client, "guanlin", "guanlin-main", 1)
+        tomb_slot = create_slot(client, "tomb-museum", "tomb-museum-main", 1)
+        guanlin_reservation = reserve(
+            client, "guanlin", "guanlin-main", guanlin_slot, "list-guanlin-001"
+        ).json()
+        tomb_reservation = reserve(
+            client, "tomb-museum", "tomb-museum-main", tomb_slot, "list-tomb-001"
+        ).json()
+
+        unauthenticated = client.get("/v1/reservations")
+        guanlin_response = client.get(
+            "/v1/reservations",
+            headers=auth("guanlin"),
+            params={"tenant_id": "tomb-museum"},
+        )
+        tomb_response = client.get("/v1/reservations", headers=auth("tomb-museum"))
+
+        assert unauthenticated.status_code == 401
+        assert guanlin_response.status_code == 200
+        assert tomb_response.status_code == 200
+        assert [item["id"] for item in guanlin_response.json()] == [guanlin_reservation["id"]]
+        assert [item["id"] for item in tomb_response.json()] == [tomb_reservation["id"]]
+        assert all(item["tenant_id"] == "guanlin" for item in guanlin_response.json())
+        assert all(item["tenant_id"] == "tomb-museum" for item in tomb_response.json())
+
+
 def test_concurrent_reservations_never_oversell(tmp_path: Path):
     client = make_client(tmp_path)
     with client:

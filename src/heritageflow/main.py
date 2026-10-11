@@ -185,6 +185,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         response.status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
         return reservation
 
+    @application.get("/v1/reservations", response_model=list[ReservationOut])
+    def list_reservations(principal: PrincipalDep, reservation_service: ServiceDep):
+        return reservation_service.list_reservations(principal.tenant_id)
+
     @application.get("/v1/reservations/{reservation_id}", response_model=ReservationOut)
     def get_reservation(
         reservation_id: str,

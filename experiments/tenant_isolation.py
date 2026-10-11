@@ -30,7 +30,22 @@ def main() -> int:
         require_status(created, 201)
         reservation = created.json()
 
+        owner_list = client.get("/v1/reservations", headers=auth("guanlin"))
+        foreign_list = client.get("/v1/reservations", headers=auth("tomb-museum"))
+        unauthenticated_list = client.get("/v1/reservations")
+        owner_reservations = owner_list.json() if owner_list.status_code == 200 else []
+        foreign_reservations = foreign_list.json() if foreign_list.status_code == 200 else []
+
         checks = {
+            "unauthenticated_list": unauthenticated_list.status_code,
+            "owner_list": owner_list.status_code,
+            "foreign_list": foreign_list.status_code,
+            "owner_reservation_visible_in_owner_list": any(
+                item.get("id") == reservation["id"] for item in owner_reservations
+            ),
+            "owner_reservation_visible_in_foreign_list": any(
+                item.get("id") == reservation["id"] for item in foreign_reservations
+            ),
             "unauthenticated_read": client.get(f"/v1/reservations/{reservation['id']}").status_code,
             "foreign_read": client.get(
                 f"/v1/reservations/{reservation['id']}", headers=auth("tomb-museum")
@@ -49,6 +64,11 @@ def main() -> int:
         }
 
     expected = {
+        "unauthenticated_list": 401,
+        "owner_list": 200,
+        "foreign_list": 200,
+        "owner_reservation_visible_in_owner_list": True,
+        "owner_reservation_visible_in_foreign_list": False,
         "unauthenticated_read": 401,
         "foreign_read": 404,
         "foreign_cancel": 404,

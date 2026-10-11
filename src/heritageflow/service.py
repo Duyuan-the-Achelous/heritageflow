@@ -215,6 +215,18 @@ class ReservationService:
             raise NotFoundError("reservation not found")
         return dict(row)
 
+    def list_reservations(self, tenant_id: str) -> list[dict]:
+        with self.database.connect() as connection:
+            rows = connection.execute(
+                """SELECT id, tenant_id, attraction_id, slot_id, quantity, status,
+                          validation_code, created_at
+                   FROM reservations
+                   WHERE tenant_id = ?
+                   ORDER BY created_at DESC, id DESC""",
+                (tenant_id,),
+            ).fetchall()
+        return [dict(row) for row in rows]
+
     def cancel_reservation(self, tenant_id: str, reservation_id: str) -> dict:
         with self.database.transaction(immediate=True) as connection:
             reservation = connection.execute(

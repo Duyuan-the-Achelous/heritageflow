@@ -104,3 +104,33 @@ def test_dynamo_tenant_scope_and_single_use_validation(service):
     assert result["status"] == "validated"
     with pytest.raises(ConflictError):
         service.validate_admission("wanan-mountain", reservation["validation_code"])
+
+
+def test_dynamo_reservation_list_is_tenant_scoped(service):
+    guanlin_slot = service.create_slot(
+        "guanlin",
+        "guanlin-main",
+        "2030-01-01T09:00:00+00:00",
+        "2030-01-01T10:00:00+00:00",
+        1,
+    )
+    tomb_slot = service.create_slot(
+        "tomb-museum",
+        "tomb-museum-main",
+        "2030-01-01T09:00:00+00:00",
+        "2030-01-01T10:00:00+00:00",
+        1,
+    )
+    guanlin_reservation, _ = service.create_reservation(
+        "guanlin", "guanlin-main", guanlin_slot["id"], "visitor-g", 1, "list-key-g"
+    )
+    tomb_reservation, _ = service.create_reservation(
+        "tomb-museum", "tomb-museum-main", tomb_slot["id"], "visitor-t", 1, "list-key-t"
+    )
+
+    assert [item["id"] for item in service.list_reservations("guanlin")] == [
+        guanlin_reservation["id"]
+    ]
+    assert [item["id"] for item in service.list_reservations("tomb-museum")] == [
+        tomb_reservation["id"]
+    ]
