@@ -7,19 +7,22 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY src ./src
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN pip install --no-cache-dir .
 
 FROM base AS runtime
 ARG ARMS_AGENT_VERSION=3.1.4
 RUN pip install --no-cache-dir "aliyun-bootstrap==1.0.8" \
     && ARMS_REGION_ID=cn-beijing aliyun-bootstrap -a install -v "${ARMS_AGENT_VERSION}" \
+    && chmod +x /usr/local/bin/docker-entrypoint.sh \
     && useradd --create-home appuser \
     && mkdir -p /data \
     && chown appuser:appuser /data
 USER appuser
 
 EXPOSE 8000
-CMD ["aliyun-instrument", "gunicorn", "--workers", "1", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000", "heritageflow.main:app"]
+ENTRYPOINT ["docker-entrypoint.sh"]
+CMD ["gunicorn", "--workers", "1", "--worker-class", "uvicorn.workers.UvicornWorker", "--bind", "0.0.0.0:8000", "heritageflow.main:app"]
 
 FROM base AS test
 COPY tests ./tests
