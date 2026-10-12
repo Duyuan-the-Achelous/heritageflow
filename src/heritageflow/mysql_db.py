@@ -89,6 +89,26 @@ MYSQL_SCHEMA = (
         INDEX idx_audit_tenant_created (tenant_id, created_at)
     ) ENGINE=InnoDB
     """,
+    """
+    CREATE TABLE IF NOT EXISTS processed_events (
+        event_id VARCHAR(100) PRIMARY KEY,
+        tenant_id VARCHAR(100) NOT NULL,
+        event_type VARCHAR(100) NOT NULL,
+        entity_id VARCHAR(100) NOT NULL,
+        payload_json JSON NOT NULL,
+        created_at VARCHAR(40) NOT NULL,
+        processed_at VARCHAR(40) NOT NULL,
+        CONSTRAINT fk_processed_event FOREIGN KEY (event_id) REFERENCES audit_events(id),
+        INDEX idx_processed_tenant_processed (tenant_id, processed_at)
+    ) ENGINE=InnoDB
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS consumer_control (
+        tenant_id VARCHAR(100) PRIMARY KEY,
+        paused BOOLEAN NOT NULL DEFAULT FALSE,
+        updated_at VARCHAR(40) NOT NULL
+    ) ENGINE=InnoDB
+    """,
 )
 
 

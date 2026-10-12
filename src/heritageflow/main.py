@@ -12,12 +12,14 @@ from fastapi.staticfiles import StaticFiles
 
 from .auth import Principal, authenticate, require_roles
 from .config import Settings, load_settings
+from .consumer import OutboxConsumer
 from .db import Database
 from .dynamo_service import DynamoReservationService
 from .mysql_db import MySQLDatabase
 from .observability import configure_http_logger
 from .schemas import (
     AttractionOut,
+    ConsumerStatusOut,
     ReservationCreate,
     ReservationOut,
     SlotCreate,
@@ -63,7 +65,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             seed(database)
             reservation_service = ReservationService(database, app_settings.visitor_hash_key)
         app.state.service = reservation_service
-        yield
+        consumer = None
+        if isinstance(reservation_service, ReservationService):
+            consumer = OutboxConsumer(reservation_service)
+            consumer.start()
+        app.state.consumer = consumer
+        try:
+            yield
+        finally:
+            if consumer:
+                consumer.stop()
 
     application = FastAPI(
         title="HeritageFlow API",
@@ -218,6 +229,27 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def tenant_metrics(principal: PrincipalDep, reservation_service: ServiceDep):
         require_roles(principal, "platform_admin", "tenant_admin")
         return reservation_service.tenant_metrics(principal.tenant_id)
+
+    @application.get("/v1/admin/consumer", response_model=ConsumerStatusOut)
+    def consumer_status(principal: PrincipalDep, reservation_service: ServiceDep):
+        require_roles(principal, "platform_admin", "tenant_admin")
+        if not isinstance(reservation_service, ReservationService):
+            raise HTTPException(status_code=501, detail="consumer controls require SQL storage")
+        return reservation_service.consumer_status(principal.tenant_id)
+
+    @application.post("/v1/admin/consumer/pause", response_model=ConsumerStatusOut)
+    def pause_consumer(principal: PrincipalDep, reservation_service: ServiceDep):
+        require_roles(principal, "platform_admin", "tenant_admin")
+        if not isinstance(reservation_service, ReservationService):
+            raise HTTPException(status_code=501, detail="consumer controls require SQL storage")
+        return reservation_service.set_consumer_paused(principal.tenant_id, True)
+
+    @application.post("/v1/admin/consumer/resume", response_model=ConsumerStatusOut)
+    def resume_consumer(principal: PrincipalDep, reservation_service: ServiceDep):
+        require_roles(principal, "platform_admin", "tenant_admin")
+        if not isinstance(reservation_service, ReservationService):
+            raise HTTPException(status_code=501, detail="consumer controls require SQL storage")
+        return reservation_service.set_consumer_paused(principal.tenant_id, False)
 
     return application
 

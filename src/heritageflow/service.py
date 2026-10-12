@@ -316,6 +316,96 @@ class ReservationService:
             "seats_reserved": row["seats"] or 0,
         }
 
+    def set_consumer_paused(self, tenant_id: str, paused: bool) -> dict:
+        updated_at = utc_now()
+        with self.database.transaction(immediate=True) as connection:
+            existing = connection.execute(
+                "SELECT tenant_id FROM consumer_control WHERE tenant_id = ?",
+                (tenant_id,),
+            ).fetchone()
+            if existing:
+                connection.execute(
+                    "UPDATE consumer_control SET paused = ?, updated_at = ? WHERE tenant_id = ?",
+                    (paused, updated_at, tenant_id),
+                )
+            else:
+                connection.execute(
+                    "INSERT INTO consumer_control (tenant_id, paused, updated_at) VALUES (?, ?, ?)",
+                    (tenant_id, paused, updated_at),
+                )
+        return self.consumer_status(tenant_id)
+
+    def consumer_status(self, tenant_id: str) -> dict:
+        with self.database.connect() as connection:
+            control = connection.execute(
+                "SELECT paused FROM consumer_control WHERE tenant_id = ?",
+                (tenant_id,),
+            ).fetchone()
+            queued = connection.execute(
+                """SELECT COUNT(*) AS queue_depth, MIN(a.created_at) AS oldest_created_at
+                   FROM audit_events a
+                   LEFT JOIN processed_events p ON p.event_id = a.id
+                   WHERE a.tenant_id = ? AND p.event_id IS NULL""",
+                (tenant_id,),
+            ).fetchone()
+            enqueued = connection.execute(
+                "SELECT COUNT(*) AS total FROM audit_events WHERE tenant_id = ?",
+                (tenant_id,),
+            ).fetchone()
+            processed = connection.execute(
+                "SELECT COUNT(*) AS total FROM processed_events WHERE tenant_id = ?",
+                (tenant_id,),
+            ).fetchone()
+
+        oldest_age = 0.0
+        if queued["oldest_created_at"]:
+            created_at = datetime.fromisoformat(str(queued["oldest_created_at"]))
+            if created_at.tzinfo is None:
+                created_at = created_at.replace(tzinfo=timezone.utc)
+            oldest_age = max(0.0, (datetime.now(timezone.utc) - created_at).total_seconds())
+        return {
+            "tenant_id": tenant_id,
+            "paused": bool(control["paused"]) if control else False,
+            "queue_depth": int(queued["queue_depth"] or 0),
+            "oldest_message_age_seconds": round(oldest_age, 3),
+            "enqueued_total": int(enqueued["total"] or 0),
+            "processed_total": int(processed["total"] or 0),
+        }
+
+    def process_outbox_batch(self, batch_size: int = 100) -> int:
+        with self.database.transaction(immediate=True) as connection:
+            rows = connection.execute(
+                """SELECT a.id, a.tenant_id, a.event_type, a.entity_id,
+                          a.payload_json, a.created_at
+                   FROM audit_events a
+                   LEFT JOIN processed_events p ON p.event_id = a.id
+                   LEFT JOIN consumer_control c ON c.tenant_id = a.tenant_id
+                   WHERE p.event_id IS NULL AND COALESCE(c.paused, 0) = 0
+                   ORDER BY a.created_at, a.id
+                   LIMIT ?""",
+                (batch_size,),
+            ).fetchall()
+            processed_at = utc_now()
+            inserted = 0
+            for row in rows:
+                cursor = connection.execute(
+                    f"""{self.database.insert_ignore_prefix} INTO processed_events
+                        (event_id, tenant_id, event_type, entity_id, payload_json,
+                         created_at, processed_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (
+                        row["id"],
+                        row["tenant_id"],
+                        row["event_type"],
+                        row["entity_id"],
+                        row["payload_json"],
+                        row["created_at"],
+                        processed_at,
+                    ),
+                )
+                inserted += cursor.rowcount
+        return inserted
+
     def _write_audit(
         self,
         connection: Any,

@@ -65,3 +65,12 @@ class TenantMetricsOut(BaseModel):
     admissions_validated: int
     seats_reserved: int
 
+
+class ConsumerStatusOut(BaseModel):
+    tenant_id: str
+    paused: bool
+    queue_depth: int
+    oldest_message_age_seconds: float
+    enqueued_total: int
+    processed_total: int
+

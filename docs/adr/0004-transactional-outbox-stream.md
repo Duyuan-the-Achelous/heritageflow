@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted for event forwarding; downstream consumer remains open.
+Accepted for event forwarding. The Alibaba Cloud SQL deployment now includes a
+database-backed idempotent audit consumer for E6; the AWS queue consumer remains
+open.
 
 ## Context
 
@@ -31,6 +33,9 @@ as the deduplication ID.
 The event is atomic with reservation state and consumers can be unavailable
 without blocking users. Streams and SQS are at-least-once systems, so downstream
 processing still must be idempotent. FIFO ordering applies within a tenant, not
-globally. The current repository stops at the queue; experiment E6 cannot claim
-end-to-end recovery until an idempotent consumer and observable processed-event
-record are implemented.
+globally. For the Alibaba Cloud MySQL deployment, `audit_events` acts as the
+transactional outbox and `processed_events` is the idempotent downstream audit
+store. Tenant-scoped controls expose pause, resume, queue depth, oldest-message
+age, and processed totals for E6. The AWS deployment still stops at the SQS
+queue and requires its own downstream consumer before the same claim can be
+made there.

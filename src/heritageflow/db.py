@@ -66,11 +66,33 @@ CREATE TABLE IF NOT EXISTS audit_events (
     created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS processed_events (
+    event_id TEXT PRIMARY KEY REFERENCES audit_events(id),
+    tenant_id TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    payload_json TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    processed_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS consumer_control (
+    tenant_id TEXT PRIMARY KEY,
+    paused INTEGER NOT NULL DEFAULT 0 CHECK (paused IN (0, 1)),
+    updated_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_slots_tenant_attraction
 ON slots(tenant_id, attraction_id, starts_at);
 
 CREATE INDEX IF NOT EXISTS idx_reservations_tenant
 ON reservations(tenant_id, created_at);
+
+CREATE INDEX IF NOT EXISTS idx_audit_tenant_created
+ON audit_events(tenant_id, created_at);
+
+CREATE INDEX IF NOT EXISTS idx_processed_tenant_processed
+ON processed_events(tenant_id, processed_at);
 """
 
 

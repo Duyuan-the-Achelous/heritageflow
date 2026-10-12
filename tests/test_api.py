@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+import time
 
 from fastapi.testclient import TestClient
 
@@ -260,3 +261,39 @@ def test_frontend_is_served(tmp_path: Path):
         assert "河洛行" in page.text
         assert script.status_code == 200
         assert "createReservation" in script.text
+
+
+def test_paused_consumer_preserves_and_drains_events_once(tmp_path: Path):
+    with make_client(tmp_path) as client:
+        pause = client.post("/v1/admin/consumer/pause", headers=auth("guanlin", "tenant_admin"))
+        assert pause.status_code == 200
+        assert pause.json()["paused"] is True
+
+        slot = create_slot(client, "guanlin", "guanlin-main", 3)
+        for index in range(3):
+            response = reserve(client, "guanlin", "guanlin-main", slot, f"outbox-{index:03d}")
+            assert response.status_code == 201
+
+        replay = reserve(client, "guanlin", "guanlin-main", slot, "outbox-000")
+        assert replay.status_code == 200
+
+        paused = client.get("/v1/admin/consumer", headers=auth("guanlin", "tenant_admin"))
+        assert paused.status_code == 200
+        assert paused.json()["queue_depth"] == 3
+        assert paused.json()["enqueued_total"] == 3
+        assert paused.json()["processed_total"] == 0
+
+        resume = client.post("/v1/admin/consumer/resume", headers=auth("guanlin", "tenant_admin"))
+        assert resume.status_code == 200
+        deadline = time.monotonic() + 3
+        status_body = resume.json()
+        while status_body["queue_depth"] and time.monotonic() < deadline:
+            time.sleep(0.05)
+            status_body = client.get(
+                "/v1/admin/consumer", headers=auth("guanlin", "tenant_admin")
+            ).json()
+
+        assert status_body["paused"] is False
+        assert status_body["queue_depth"] == 0
+        assert status_body["enqueued_total"] == 3
+        assert status_body["processed_total"] == 3
