@@ -16,6 +16,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+deploy = [
+  "alibabacloud-sae20190506==2.11.2",
+  "alibabacloud-tea-openapi==0.4.6",
+  "darabonba-core==1.0.9",
+]
 dev = [
   "httpx>=0.28,<1",
   "moto[dynamodb]>=5.0,<6",

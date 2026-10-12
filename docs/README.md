@@ -12,6 +12,8 @@ deployment.
 - `architecture.md`: system boundaries, cloud topology, and operational flow.
 - `alicloud-roadmap.md`: incremental migration from the public preview to the
   managed Alibaba Cloud evaluation environment.
+- `sae-pipeline-deployment.md`: opt-in automated SAE image release, RAM/GitHub
+  setup, safe release policy, and the real-run evidence still required.
 - `data-model.md`: DynamoDB keys, entities, access patterns, and invariants.
 - `threat-model.md`: assets, trust boundaries, threats, and mitigations.
 - `traceability.md`: requirement-to-implementation-to-evidence matrix.

@@ -157,6 +157,17 @@ Keep `.env.preview` on the server only. Do not commit it or paste its contents
 into an issue, report, or chat. The final cloud evaluation must use a managed
 shared database and horizontally scalable compute instead of this preview.
 
+## Alibaba Cloud pipeline deployment
+
+GitHub Actions can update the existing SAE image after tests and ACR
+publication. This deployment job is disabled until repository variable
+`SAE_DEPLOY_ENABLED` is explicitly set to `true`. It uses a dedicated RAM
+credential, a commit-tagged image, a rolling-release policy, change-order
+polling, and public health/readiness probes. Review permissions and release
+policy in [the SAE pipeline guide](docs/sae-pipeline-deployment.md) before
+enabling it. Local implementation does not establish a successful cloud run.
+The Alibaba Cloud Terraform environment is not yet fully defined or rebuildable.
+
 ## AWS deployment
 
 The cloud backend is selected with:
