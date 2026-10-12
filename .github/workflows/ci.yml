@@ -102,6 +102,7 @@ jobs:
       SAE_APP_ID: ${{ vars.SAE_APP_ID || '1187c616-c49b-4b0f-8cec-2f9e45989acd' }}
       SAE_REGION: cn-beijing
       SAE_BASE_URL: ${{ vars.SAE_BASE_URL || 'http://182.92.2.36' }}
+      SAE_CHECK_ONLY: ${{ vars.SAE_CHECK_ONLY || 'false' }}
       ACR_IMAGE: crpi-pcn8j07ylq6rgqgz.cn-beijing.personal.cr.aliyuncs.com/duyuan-heritageflow/heritageflow
     steps:
       - uses: actions/checkout@v4
@@ -116,13 +117,18 @@ jobs:
           ALIBABA_CLOUD_SECURITY_TOKEN: ${{ secrets.SAE_SECURITY_TOKEN }}
           RELEASE_COMMIT: ${{ github.sha }}
         run: |
+          check_args=()
+          if [ "$SAE_CHECK_ONLY" = "true" ]; then
+            check_args+=(--check-only)
+          fi
           python scripts/deploy_sae.py \
             --app-id "$SAE_APP_ID" \
             --region "$SAE_REGION" \
             --image "$ACR_IMAGE:$RELEASE_COMMIT" \
             --commit "$RELEASE_COMMIT" \
             --base-url "$SAE_BASE_URL" \
-            --output results/.local/sae-deployment.json
+            --output results/.local/sae-deployment.json \
+            "${check_args[@]}"
       - name: Preserve sanitized deployment evidence
         if: always()
         uses: actions/upload-artifact@v4

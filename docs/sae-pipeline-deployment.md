@@ -95,6 +95,14 @@ while publishing and reviewing the workflow changes. Once enabled, subsequent
 main-branch pushes that pass tests and publish ACR automatically request a
 release. An explicit required-reviewer gate, if configured, precedes the job.
 
+For read-only cloud diagnosis, set repository variable `SAE_CHECK_ONLY=true`
+before enabling/rerunning the job. The runner then only reads application
+configuration and probes health/readiness; it never calls DeployApplication.
+A green check-only job is not deployment evidence: its report explicitly says
+`mode: check_only` and `phase: check_complete`. Restore `SAE_CHECK_ONLY=false`
+before an authorized real release. Provider exceptions record only a validated
+error code, never the SDK message, signed request, or complete configuration.
+
 ## Review release policy before enabling
 
 The API request updates the image and explicitly selects rolling deployment:

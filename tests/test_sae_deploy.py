@@ -216,3 +216,30 @@ def test_main_saves_failure_without_sdk_secret_text(tmp_path, monkeypatch, capsy
     report = json.loads(output.read_text())
     assert report["status"] == "failed"
     assert "private-signed-request-and-key" not in output.read_text() + capsys.readouterr().out
+
+
+def test_main_preserves_only_safe_sdk_error_code(tmp_path, monkeypatch):
+    class FakeSdkError(Exception):
+        code = "Forbidden.RAM"
+    def fail(region):
+        raise FakeSdkError("private-signed-request-and-key")
+    monkeypatch.setattr(deploy, "SaeApi", fail)
+    output = tmp_path / "report.json"
+    assert deploy.main(["--app-id", APP, "--image", IMAGE, "--commit", COMMIT,
+                        "--base-url", BASE, "--output", str(output)]) == 1
+    report = json.loads(output.read_text())
+    assert report["error_code"] == "Forbidden.RAM"
+    assert "private-signed-request-and-key" not in output.read_text()
+
+
+def test_check_only_does_not_request_a_deployment(tmp_path, monkeypatch):
+    api = FakeApi()
+    monkeypatch.setattr(deploy, "SaeApi", lambda region: api)
+    monkeypatch.setattr(deploy, "probe", lambda *args: True)
+    output = tmp_path / "report.json"
+    assert deploy.main(["--app-id", APP, "--image", IMAGE, "--commit", COMMIT,
+                        "--base-url", BASE, "--check-only", "--output", str(output)]) == 0
+    assert api.writes == []
+    report = json.loads(output.read_text())
+    assert report["mode"] == "check_only"
+    assert report["phase"] == "check_complete"

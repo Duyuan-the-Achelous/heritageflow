@@ -193,6 +193,7 @@ def main(argv=None) -> int:
     parser.add_argument("--commit", required=True)
     parser.add_argument("--base-url", required=True)
     parser.add_argument("--timeout", type=int, default=900)
+    parser.add_argument("--check-only", action="store_true", help="Read existing SAE configuration and probe the origin without deploying")
     parser.add_argument("--output", type=Path, default=Path("results/.local/sae-deployment.json"))
     args = parser.parse_args(argv)
     evidence = {"started_at_utc": datetime.now(timezone.utc).isoformat(), "status": "failed", "phase": "preflight"}
@@ -201,14 +202,32 @@ def main(argv=None) -> int:
         evidence.update({"application_id": args.app_id, "region": args.region,
                          "commit": args.commit, "requested_image": args.image,
                          "base_url": args.base_url,
+                         "mode": "check_only" if args.check_only else "deploy",
                          "transport": "HTTPS" if args.base_url.startswith("https://") else "HTTP (TLS unverified)"})
-        release(SaeApi(args.region), args.app_id, args.image, args.commit,
-                args.base_url, evidence, args.timeout)
+        api = SaeApi(args.region)
+        if args.check_only:
+            config = api.application(args.app_id)
+            evidence.update({"mode": "check_only", "existing_replicas": config.get("Replicas"),
+                             "previous_image": config.get("ImageUrl"),
+                             "package_type": config.get("PackageType"),
+                             "application_matches": config.get("AppId") == args.app_id,
+                             "readiness_configured": bool(config.get("Readiness"))})
+            healthy = probe(args.base_url, "/health", "ok") and probe(args.base_url, "/ready", "ready")
+            if not healthy:
+                raise DeploymentError("Public health/readiness check failed")
+            evidence.update({"status": "success", "phase": "check_complete",
+                             "health": "passed", "readiness": "passed"})
+        else:
+            release(api, args.app_id, args.image, args.commit,
+                    args.base_url, evidence, args.timeout)
     except DeploymentError as error:
         evidence["error"] = str(error)
     except Exception as error:
         # SDK exception text can include signed URLs or sensitive parameters.
         evidence["error"] = f"Deployment stopped ({type(error).__name__}); inspect SAE before retrying"
+        code = getattr(error, "code", None)
+        if isinstance(code, str) and re.fullmatch(r"[A-Za-z][A-Za-z0-9_.-]{0,79}", code):
+            evidence["error_code"] = code
     finally:
         evidence["finished_at_utc"] = datetime.now(timezone.utc).isoformat()
         args.output.parent.mkdir(parents=True, exist_ok=True)
